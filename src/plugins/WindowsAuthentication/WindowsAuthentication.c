@@ -15,10 +15,6 @@
 extern "C" {
 #endif
 
- __declspec(dllexport) int WindowsAuthentication(struct pluginlink * pluginlink, 
-					 int argc, char** argv);
-
-
 static struct auth alwaysauth;
 
 static char sidbuf[4096];
@@ -41,7 +37,7 @@ extern "C" {
 	if(dom)*dom++=0;
 	if(!LogonUser(	dom?dom:(char *)param->username,
 					dom?(char *)param->username:NULL,
-					param->password,
+					(char *)param->password,
 					LOGON32_LOGON_NETWORK,
 					LOGON32_PROVIDER_DEFAULT,
 					&h))return 5;
@@ -54,7 +50,7 @@ extern "C" {
 		if(GetLengthSid(ptg->Groups[i].Sid)==sidlen){
 			if(!memcmp((void *)ptg->Groups[i].Sid, (void *)psid, sidlen)) {
 				setlocale(LC_CTYPE, ".ACP");
-				_strlwr(param->username);
+				_strlwr((char *)param->username);
 				return 0;
 			}
 		}
@@ -62,12 +58,13 @@ extern "C" {
 	return 7;
  }
 
-#ifdef  __cplusplus
-}
+#ifdef WATCOM
+#pragma aux WindowsAuthentication "*" parm caller [ ] value struct float struct routine [eax] modify [eax ecx edx]
+#undef PLUGINCALL
+#define PLUGINCALL
 #endif
 
-
-int WindowsAuthentication(struct pluginlink * pluginlink, int argc, char** argv){
+PLUGINAPI int PLUGINCALL WindowsAuthentication(struct pluginlink * pluginlink, int argc, char** argv){
 	char tmpbuf[4096];
 	DWORD dlen, sidlen;
 	SID_NAME_USE snu;
@@ -91,4 +88,7 @@ int WindowsAuthentication(struct pluginlink * pluginlink, int argc, char** argv)
 	return 0;
 }
 
+#ifdef  __cplusplus
+}
+#endif
 

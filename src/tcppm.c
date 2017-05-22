@@ -1,6 +1,6 @@
 /*
    3APA3A simpliest proxy server
-   (c) 2002-2008 by ZARAZA <3APA3A@security.nnov.ru>
+   (c) 2002-2016 by Vladimir Dubrovin <3proxy@3proxy.ru>
 
    please read License Agreement
 
@@ -20,7 +20,7 @@ void * tcppmchild(struct clientparam* param) {
  param->operation = CONNECT;
  res = (*param->srv->authfunc)(param);
  if(res) {RETURN(res);}
- RETURN (sockmap(param, conf.timeouts[CONNECTION_L]));
+ RETURN (mapsocket(param, conf.timeouts[CONNECTION_L]));
 CLEANRET:
  
  (*param->srv->logfunc)(param, NULL);
@@ -34,7 +34,7 @@ struct proxydef childdef = {
 	0,
 	0,
 	S_TCPPM,
-	""
+	" -s use splice() (Fast proxying but no filtering)\n"
 };
 #include "proxymain.c"
 #endif

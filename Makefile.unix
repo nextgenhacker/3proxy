@@ -11,16 +11,18 @@ BUILDDIR =
 CC = gcc
 
 # you may need -L/usr/pkg/lib for older NetBSD versions
-CFLAGS = -Wall -g -O2 -c -pthread -D_THREAD_SAFE -D_REENTRANT -DNOODBC -DWITH_STD_MALLOC -DFD_SETSIZE=4096 -DWITH_POLL
+CFLAGS = -g -O2 -c -pthread -D_THREAD_SAFE -D_REENTRANT -DNOODBC -DWITH_STD_MALLOC -DFD_SETSIZE=4096 -DWITH_POLL
 COUT = -o 
 LN = gcc
-LDFLAGS = -Wall -O2 -pthread
+LDFLAGS = -O2 -pthread
 # -lpthreads may be reuqired on some platforms instead of -pthreads
 # -ldl or -lld may be required for some platforms
 DCFLAGS = -fpic
 DLFLAGS = -shared
 DLSUFFICS = .ld.so
 LIBS =
+LIBSPREFIX = -l
+LIBSSUFFIX = 
 LNOUT = -o 
 EXESUFFICS =
 OBJSUFFICS = .o
@@ -30,7 +32,7 @@ REMOVECOMMAND = rm -f
 TYPECOMMAND = cat
 COMPATLIBS =
 MAKEFILE = Makefile.unix
-PLUGINS = StringsPlugin TrafficPlugin PCREPlugin
+PLUGINS = StringsPlugin TrafficPlugin PCREPlugin PamAuth
 
 include Makefile.inc
 

@@ -1,12 +1,12 @@
 /*
    3APA3A simpliest proxy server
-   (c) 2002-2009 by ZARAZA <3APA3A@security.nnov.ru>
+   (c) 2002-2016 by Vladimir Dubrovin <3proxy@3proxy.ru>
 
    please read License Agreement
 
 */
 
-#define COPYRIGHT "(c)2000-2009 3APA3A, Vladimir Dubrovin & 3proxy.ru\n"\
+#define COPYRIGHT "(c)3APA3A, Vladimir Dubrovin & 3proxy.ru\n"\
 		 "Documentation and sources: http://3proxy.ru/\n"\
 		 "Please read license agreement in \'copying\' file.\n"\
 		 "You may not use this program without accepting license agreement"
@@ -42,6 +42,7 @@
 
 #define UDPBUFSIZE 16384
 #define TCPBUFSIZE  8192
+#define SRVBUFSIZE (param->srv->bufsize?param->srv->bufsize:((param->service == S_UDPPM)?UDPBUFSIZE:TCPBUFSIZE))
 
 
 #ifdef _WIN32
@@ -84,6 +85,9 @@
 #ifdef EINTR
 #undef EINTR
 #endif
+#ifndef EINPROGRESS
+#define EINPROGRESS WSAEWOULDBLOCK
+#endif
 #define EINTR WSAEWOULDBLOCK
 #define SLEEPTIME 1
 #define usleep Sleep
@@ -104,7 +108,7 @@
 #define PTHREAD_STACK_MIN 32768
 #define sockerror strerror
 #endif
-#define daemonize() daemon(1,1)
+void daemonize(void);
 #define SLEEPTIME 1000
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -122,8 +126,6 @@
 #ifdef _WIN32
 #define strcasecmp stricmp
 #define strncasecmp strnicmp
-#else
-extern pthread_attr_t pa;
 #endif
 
 #ifndef SOCKET_ERROR
@@ -142,6 +144,7 @@ extern pthread_attr_t pa;
 
 #include "structures.h"
 
+#define MAXRADIUS 5
 
 extern RESOLVFUNC resolvfunc;
 
@@ -152,6 +155,7 @@ extern int timetoexit;
 extern struct extparam conf;
 
 int sockmap(struct clientparam * param, int timeo);
+int splicemap(struct clientparam * param, int timeo);
 int socksend(SOCKET sock, unsigned char * buf, int bufsize, int to);
 int socksendto(SOCKET sock, struct sockaddr * sin, unsigned char * buf, int bufsize, int to);
 int sockrecvfrom(SOCKET sock, struct sockaddr * sin, unsigned char * buf, int bufsize, int to);
@@ -190,7 +194,7 @@ unsigned bandlimitfunc(struct clientparam *param, unsigned nbytesin, unsigned nb
 int scanaddr(const unsigned char *s, unsigned long * ip, unsigned long * mask);
 int myinet_ntop(int af, void *src, char *dst, socklen_t size);
 extern struct nserver nservers[MAXNSERVERS];
-struct nserver authnserver;
+extern struct nserver authnserver;
 unsigned long getip(unsigned char *name);
 unsigned long getip46(int family, unsigned char *name,  struct sockaddr *sa);
 unsigned long myresolver(int, unsigned char *, unsigned char *);
@@ -235,7 +239,7 @@ void mschap(const unsigned char *win_password,
 struct hashtable;
 void hashadd(struct hashtable *ht, const unsigned char* name, unsigned char* value, time_t expires);
 
-void parsehost(int family, char *host, struct sockaddr *sa);
+int parsehost(int family, unsigned char *host, struct sockaddr *sa);
 int parsehostname(char *hostname, struct clientparam *param, unsigned short port);
 int parseusername(char *username, struct clientparam *param, int extpasswd);
 int parseconnusername(char *username, struct clientparam *param, int extpasswd, unsigned short port);
@@ -246,6 +250,7 @@ unsigned long udpresolve(int af, unsigned char * name, unsigned char * value, un
 
 struct ace * copyacl (struct ace *ac);
 struct auth * copyauth (struct auth *);
+void * itfree(void *data, void * retval);
 void freeacl(struct ace *ac);
 void freeauth(struct auth *);
 void freefilter(struct filter *filter);
@@ -265,6 +270,8 @@ void srvinit(struct srvparam * srv, struct clientparam *param);
 void srvinit2(struct srvparam * srv, struct clientparam *param);
 void srvfree(struct srvparam * srv);
 unsigned char * dologname (unsigned char *buf, unsigned char *name, const unsigned char *ext, ROTATION lt, time_t t);
+int readconfig(FILE * fp);
+int connectwithpoll(SOCKET sock, struct sockaddr *sa, SASIZETYPE size);
 
 
 int myrand(void * entropy, int len);
@@ -307,25 +314,43 @@ struct datatype;
 struct dictionary;
 struct node;
 struct property;
-
+extern unsigned char tmpbuf[8192];
+extern pthread_mutex_t config_mutex;
 extern pthread_mutex_t bandlim_mutex;
 extern pthread_mutex_t hash_mutex;
 extern pthread_mutex_t tc_mutex;
 extern pthread_mutex_t pwl_mutex;
-#ifndef NOODBC
-extern pthread_mutex_t odbc_mutex;
-#endif
-
+extern pthread_mutex_t log_mutex;
+extern pthread_mutex_t rad_mutex;
 extern struct datatype datatypes[64];
 
 extern struct commands commandhandlers[];
+
+#ifdef WITHSPLICE
+#define mapsocket(a,b) (a->srv->usesplice?splicemap(a,b):sockmap(a,b))
+#else
+#define mapsocket(a,b) sockmap(a,b)
+#endif
+
+#ifdef NOIPV6
+extern struct  sockaddr_in radiuslist[MAXRADIUS];
+#else
+extern struct  sockaddr_in6 radiuslist[MAXRADIUS];
+#endif
+
+extern int nradservers;
+extern char * radiussecret;
+extern struct socketoptions {
+	int opt;
+	char * optname;
+} sockopts[];
+void setopts(SOCKET s, int opts);
 
 #ifdef _WINCE
 char * CEToUnicode (const char *str);
 int cesystem(const char *str);
 int ceparseargs(const char *str);
 extern char * ceargv[32];
-
 
 #define system(S) cesystem(S)
 #endif

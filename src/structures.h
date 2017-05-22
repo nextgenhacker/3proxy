@@ -1,3 +1,11 @@
+/*
+   3APA3A simpliest proxy server
+   (c) 2002-2016 by Vladimir Dubrovin <3proxy@3proxy.ru>
+
+   please read License Agreement
+
+*/
+
 #ifndef _STRUCTURES_H_
 #define _STRUCTURES_H_
 
@@ -20,6 +28,7 @@ extern "C" {
 #ifndef _WIN32
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <pthread.h>
@@ -162,7 +171,21 @@ typedef void (*TRAFCOUNTFUNC)(struct clientparam * param);
 typedef void * (*EXTENDFUNC) (struct node *node);
 typedef void (*CBFUNC)(void *cb, char * buf, int inbuf);
 typedef void (*PRINTFUNC) (struct node *node, CBFUNC cbf, void*cb);
-typedef int (*PLUGINFUNC) (struct pluginlink *pluginlink, int argc, char** argv);
+
+#ifdef WIN32
+
+#define PLUGINAPI __declspec(dllexport)
+typedef int (__cdecl *PLUGINFUNC) (struct pluginlink *pluginlink, int argc, char** argv);
+#define PLUGINCALL __cdecl
+
+#else
+
+#define PLUGINCALL
+#define PLUGINAPI
+typedef int (*PLUGINFUNC)(struct pluginlink *pluginlink, int argc, char** argv);
+
+#endif
+
 
 struct auth {
 	struct auth *next;
@@ -217,6 +240,7 @@ typedef enum {
 	R_SOCKS5,
 	R_HTTP,
 	R_POP3,
+	R_SMTP,
 	R_FTP,
 	R_CONNECTP,
 	R_SOCKS4P,
@@ -225,7 +249,7 @@ typedef enum {
 	R_SOCKS5B,
 	R_ADMIN,
 	R_ICQ,
-	R_MSN
+	R_EXTIP
 } REDIRTYPE;
 
 struct chain {
@@ -237,6 +261,7 @@ struct chain {
 	struct sockaddr_in addr;
 #endif
 	unsigned short weight;
+	unsigned char * exthost;
 	unsigned char * extuser;
 	unsigned char * extpass;
 };
@@ -363,23 +388,31 @@ struct srvparam {
 	SOCKET srvsock, cbsock;
 	int childcount;
 	int maxchild;
-	int version;
+	int paused, version;
 	int singlepacket;
 	int usentlm;
-	int nouser;
+	int needuser;
 	int silent;
 	int transparent;
 	int nfilters, nreqfilters, nhdrfilterscli, nhdrfilterssrv, npredatfilters, ndatfilterscli, ndatfilterssrv;
 	int family;
+	int stacksize;
+	int noforce;
+	int anonymous;
+	int clisockopts, srvsockopts, lissockopts;
+#ifdef WITHSPLICE
+	int usesplice;
+#endif
 	unsigned bufsize;
 	unsigned logdumpsrv, logdumpcli;
 #ifndef NOIPV6
 	struct sockaddr_in6 intsa;
 	struct sockaddr_in6 extsa6;
+	struct sockaddr_in6 extsa;
 #else
 	struct sockaddr_in intsa;
-#endif
 	struct sockaddr_in extsa;
+#endif
 	pthread_mutex_t counter_mutex;
 	struct pollfd fds;
 	FILE *stdlog;
@@ -420,6 +453,9 @@ struct clientparam {
 
 	REDIRTYPE redirtype;
 
+	uint64_t	waitclient64,
+			waitserver64;
+
 	int	redirected,
 		operation,
 		nfilters, nreqfilters, nhdrfilterscli, nhdrfilterssrv, npredatfilters, ndatfilterscli, ndatfilterssrv,
@@ -427,8 +463,6 @@ struct clientparam {
 
 	int	res,
 		status;
-	uint64_t	waitclient64,
-			waitserver64;
 	int	pwtype,
 		threadid,
 		weight,
@@ -436,7 +470,9 @@ struct clientparam {
 		nolongdatfilter,
 		nooverwritefilter,
 		transparent,
-		chunked;
+		chunked,
+		paused,
+		version;
 
 	unsigned char 	*hostname,
 			*username,
@@ -489,8 +525,9 @@ struct extparam {
 	struct bandlim * bandlimiter,  *bandlimiterout;
 	struct trafcount * trafcounter;
 	struct srvparam *services;
-	int threadinit, counterd, haveerror, rotate, paused, archiverc,
-		demon, maxchild, singlepacket, needreload, timetoexit;
+	int stacksize,
+		threadinit, counterd, haveerror, rotate, paused, archiverc,
+		demon, maxchild, needreload, timetoexit, version, noforce;
 	int authcachetype, authcachetime;
 	int filtermaxsize;
 	unsigned char *logname, **archiver;
@@ -499,7 +536,7 @@ struct extparam {
 #ifndef NOIPV6
 	struct sockaddr_in6 intsa;
 	struct sockaddr_in6 extsa6;
-	struct sockaddr_in extsa;
+	struct sockaddr_in6 extsa;
 #else
 	struct sockaddr_in intsa;
 	struct sockaddr_in extsa;
@@ -609,13 +646,13 @@ struct sockfuncs {
 	int (WINAPI *_connect)(SOCKET s, const struct sockaddr *name, int namelen);
 	int (WINAPI *_getpeername)(SOCKET s, struct sockaddr * name, int * namelen);
 	int (WINAPI *_getsockname)(SOCKET s, struct sockaddr * name, int * namelen);
-   	int (WINAPI *_getsockopt)(SOCKET s, int level, int optname, void * optval, int * optlen);
-	int (WINAPI *_setsockopt)(SOCKET s, int level, int optname, const void *optval, int optlen);
+   	int (WINAPI *_getsockopt)(SOCKET s, int level, int optname, char * optval, int * optlen);
+	int (WINAPI *_setsockopt)(SOCKET s, int level, int optname, const char *optval, int optlen);
 	int (WINAPI *_poll)(struct pollfd *fds, unsigned int nfds, int timeout);
-	int (WINAPI *_send)(SOCKET s, const void *msg, int len, int flags);
-	int  (WINAPI *_sendto)(SOCKET s, const void *msg, int len, int flags, const struct sockaddr *to, int tolen);
-	int  (WINAPI *_recv)(SOCKET s, void *buf, int len, int flags);
-	int  (WINAPI *_recvfrom)(SOCKET s, void * buf, int len, int flags, struct sockaddr * from, int * fromlen);
+	int (WINAPI *_send)(SOCKET s, const char *msg, int len, int flags);
+	int  (WINAPI *_sendto)(SOCKET s, const char *msg, int len, int flags, const struct sockaddr *to, int tolen);
+	int  (WINAPI *_recv)(SOCKET s, char *buf, int len, int flags);
+	int  (WINAPI *_recvfrom)(SOCKET s, char * buf, int len, int flags, struct sockaddr * from, int * fromlen);
 	int (WINAPI *_shutdown)(SOCKET s, int how);
 	int (WINAPI *_closesocket)(SOCKET s);
 #else
@@ -690,6 +727,17 @@ struct pluginlink {
 	unsigned char * (*dologname) (unsigned char *buf, unsigned char *name, const unsigned char *ext, ROTATION lt, time_t t);
 };
 
+struct counter_header {
+	unsigned char sig[4];
+	time_t updated;
+};
+
+struct counter_record {
+	uint64_t traf64;
+	time_t cleared;
+	time_t updated;
+};
+
 extern struct pluginlink pluginlink;
 extern char *rotations[];
 
@@ -733,7 +781,6 @@ typedef enum {
 	TYPE_PERIOD,
 	TYPE_SERVER
 }DATA_TYPE;
-
 
 #ifdef  __cplusplus
 }

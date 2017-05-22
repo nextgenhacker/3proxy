@@ -1,6 +1,6 @@
 /*
    3APA3A simpliest proxy server
-   (c) 2002-2008 by ZARAZA <3APA3A@security.nnov.ru>
+   (c) 2002-2016 by Vladimir Dubrovin <3proxy@3proxy.ru>
 
    please read License Agreement
 
@@ -44,11 +44,11 @@ void * pop3pchild(struct clientparam* param) {
 		{RETURN(623);}
  param->statscli64 += (uint64_t)(strlen((char *)param->extusername) + 7);
  param->nwrites++;
- RETURN (sockmap(param, 180));
+ RETURN (mapsocket(param, 180));
 CLEANRET:
 
  if(param->hostname&&param->extusername) {
-	sprintf((char *)buf, "%.64s@%.128s%c%hu", param->extusername, param->hostname, (*SAPORT(&param->sinsr)==110)?0:':', ntohs(*SAPORT(&param->sinsr)));
+	sprintf((char *)buf, "%.128s@%.128s%c%hu", param->extusername, param->hostname, (*SAPORT(&param->sinsr)==110)?0:':', ntohs(*SAPORT(&param->sinsr)));
 	 (*param->srv->logfunc)(param, buf);
  }
  else (*param->srv->logfunc)(param, NULL);

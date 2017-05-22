@@ -1,6 +1,6 @@
 /*
    3APA3A simpliest proxy server
-   (c) 2002-2008 by ZARAZA <3APA3A@security.nnov.ru>
+   (c) 2002-2016 by Vladimir Dubrovin <3proxy@3proxy.ru>
 
    please read License Agreement
 
@@ -332,7 +332,7 @@ void *myrealloc(void *ptr, size_t size){
 	if(size <= memsizes[l]) return ptr;
 	p = myalloc(size);
 	if(p){
-		memcpy(p,ptr,size);
+		memmove(p,ptr,size);
 		myfree(ptr);
 	}
 	return p;	

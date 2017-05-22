@@ -1,6 +1,6 @@
 /*
    3APA3A simpliest proxy server
-   (c) 2002-2008 by ZARAZA <3APA3A@security.nnov.ru>
+   (c) 2002-2016 by Vladimir Dubrovin <3proxy@3proxy.ru>
 
    please read License Agreement
 
@@ -473,7 +473,7 @@ void * adminchild(struct clientparam* param) {
 					"<td>MB%s</td>"
 					"<td>%"PRINTF_INT64_MODIFIER"u</td>"
 					"<td>%s</td>",
-				 cp->traflim64,
+				 cp->traflim64 / (1024 * 1024),
 				 rotations[cp->type],
 				 cp->traf64,
 				 cp->cleared?ctime(&cp->cleared):"never"

@@ -12,7 +12,7 @@ Kirill Lopuchov <lopuchov@mail.ru>
 #include <security/pam_appl.h>
 
 
-
+pthread_mutex_t pam_mutex;
 
 static int         already_loaded = 0;
 
@@ -89,9 +89,10 @@ static int pamfunc(struct clientparam *param)
   /*start process auth */  
   conv.appdata_ptr = (char *) param->password;
 
+  pthread_mutex_lock(&pam_mutex);
   if (!pamh)
     {
-      retval = pam_start ((char *)service, "3proxy@" , &conv, &pamh);
+	retval = pam_start ((char *)service, "3proxy@" , &conv, &pamh);
     }
    if (retval == PAM_SUCCESS)
        retval = pam_set_item (pamh, PAM_USER, param->username); 
@@ -110,26 +111,34 @@ static int pamfunc(struct clientparam *param)
       retval = pam_end (pamh, retval);
    if (retval != PAM_SUCCESS)
       {  pamh = NULL;   }
+  pthread_mutex_unlock(&pam_mutex);
 
   return rc;
 
 }
 
+#ifdef WATCOM
+#pragma aux start "*" parm caller [ ] value struct float struct routine [eax] modify [eax ecx edx]
+#undef PLUGINCALL
+#define PLUGINCALL
+#endif
+
 /*------------------------------- MAIN --------------------------------------
  start plugin init  */
-int start(struct pluginlink * pluginlink, int argc, unsigned char** argv)
+PLUGINAPI int PLUGINCALL start(struct pluginlink * pluginlink, int argc, unsigned char** argv)
 {
   
   
  if(argc < 2) return 1;
  pl = pluginlink;
  if(service) pl->myfree(service);
- service=pl->mystrdup(argv[1]); 
+ service=(unsigned char *)pl->mystrdup((char *)argv[1]); 
 
  if (already_loaded) { return (0); }
 
  already_loaded = 1;
     
+ pthread_mutex_init(&pam_mutex, NULL);
  pamauth.authenticate = pamfunc;
  pamauth.authorize = pluginlink->checkACL;
  pamauth.desc = "pam";

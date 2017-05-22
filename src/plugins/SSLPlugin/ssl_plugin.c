@@ -325,23 +325,66 @@ static struct filter ssl_filter = {
 	ssl_filter_close
 };
 
+int mitm = 0;
+int ssl_inited = 0;
 
-#ifdef _WIN32
-__declspec(dllexport)
+static int h_mitm(int argc, unsigned char **argv){
+	if(!ssl_inited) {
+		ssl_init();
+		ssl_inited = 1;
+	}
+	if((mitm&1)) return 1;
+	if(mitm) usleep(100*SLEEPTIME);
+	ssl_filter.next = pl->conf->filters;
+	pl->conf->filters = &ssl_filter;
+	mitm++;
+	return 0;
+}
+
+static int h_nomitm(int argc, unsigned char **argv){
+	struct filter * sf;
+	if(!(mitm&1)) return 1;
+	if(mitm) usleep(100*SLEEPTIME);
+	if(pl->conf->filters == &ssl_filter) pl->conf->filters = ssl_filter.next;
+	else for(sf = pl->conf->filters; sf && sf->next; sf=sf->next){
+		if(sf->next == &ssl_filter) {
+			sf->next = ssl_filter.next;
+			break;
+		}
+	}
+	mitm++;
+	return 0;
+}
+
+static int h_certpath(int argc, unsigned char **argv){
+	size_t len;
+	len = strlen(argv[1]);
+	if(!len || (argv[1][len - 1] != '/' && argv[1][len - 1] != '\\')) return 1;
+	if(cert_path && *cert_path) free(cert_path);
+	cert_path = strdup(argv[1]);
+	return 0;
+}
+
+static struct commands ssl_commandhandlers[] = {
+	{ssl_commandhandlers+1, "ssl_mitm", h_mitm, 1, 1},
+	{ssl_commandhandlers+2, "ssl_nomitm", h_nomitm, 1, 1},
+	{NULL, "ssl_certcache", h_certpath, 2, 2},
+};
+
+
+#ifdef WATCOM
+#pragma aux ssl_plugin "*" parm caller [ ] value struct float struct routine [eax] modify [eax ecx edx]
+#undef PLUGINCALL
+#define PLUGINCALL
 #endif
 
- int ssl_plugin (struct pluginlink * pluginlink, 
+PLUGINAPI int PLUGINCALL ssl_plugin (struct pluginlink * pluginlink, 
 					 int argc, char** argv){
+
 	pl = pluginlink;
-	if(argc > 1) {
-		if(cert_path && *cert_path) free(cert_path);
-		cert_path = strdup(argv[1]);
-	}
 	if(!ssl_loaded){
 		ssl_loaded = 1;
 		pthread_mutex_init(&ssl_mutex, NULL);
-		ssl_filter.next = pl->conf->filters;
-		pl->conf->filters = &ssl_filter;
 		memcpy(&sso, pl->so, sizeof(struct sockfuncs));
 		pl->so->_send = ssl_send;
 		pl->so->_recv = ssl_recv;
@@ -349,11 +392,14 @@ __declspec(dllexport)
 		pl->so->_recvfrom = ssl_recvfrom;
 		pl->so->_closesocket = ssl_closesocket;
 		pl->so->_poll = ssl_poll;
+		ssl_commandhandlers[2].next = pl->commandhandlers->next;
+		pl->commandhandlers->next = ssl_commandhandlers;
 	}
-	else{
+	else {
 		ssl_release();
+		ssl_inited = 0;
 	}
-	ssl_init();
+
 	tcppmfunc = (PROXYFUNC)pl->findbyname("tcppm");	
 	if(!tcppmfunc){return 13;}
 	proxyfunc = (PROXYFUNC)pl->findbyname("proxy");	

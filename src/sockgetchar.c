@@ -1,14 +1,11 @@
 /*
    3APA3A simpliest proxy server
-   (c) 2002-2008 by ZARAZA <3APA3A@security.nnov.ru>
+   (c) 2002-2016 by Vladimir Dubrovin <3proxy@3proxy.ru>
 
    please read License Agreement
 */
 
 #include "proxy.h"
-
-#define BUFSIZE (param->srv->bufsize?param->srv->bufsize:((param->service == S_UDPPM)?UDPBUFSIZE:TCPBUFSIZE))
-
 
 int socksend(SOCKET sock, unsigned char * buf, int bufsize, int to){
  int sent = 0;
@@ -22,7 +19,7 @@ int socksend(SOCKET sock, unsigned char * buf, int bufsize, int to){
 	res = so._poll(&fds, 1, to*1000);
 	if(res < 0 && (errno == EAGAIN || errno == EINTR)) continue;
 	if(res < 1) break;
-	res = so._send(sock, buf + sent, bufsize - sent, 0);
+	res = so._send(sock, (char *)buf + sent, bufsize - sent, 0);
 	if(res < 0) {
 		if(errno == EAGAIN || errno == EINTR) continue;
 		break;
@@ -45,7 +42,7 @@ int socksendto(SOCKET sock, struct sockaddr * sin, unsigned char * buf, int bufs
  	res = so._poll(&fds, 1, to);
 	if(res < 0 && (errno == EAGAIN || errno == EINTR)) continue;
 	if(res < 1) break;
-	res = so._sendto(sock, buf + sent, bufsize - sent, 0, sin, SASIZE(sin));
+	res = so._sendto(sock, (char *)buf + sent, bufsize - sent, 0, sin, SASIZE(sin));
 	if(res < 0) {
 		if(errno !=  EAGAIN && errno != EINTR) break;
 		continue;
@@ -66,7 +63,7 @@ int sockrecvfrom(SOCKET sock, struct sockaddr * sin, unsigned char * buf, int bu
 	if (so._poll(&fds, 1, to)<1) return 0;
 	sasize = SASIZE(sin);
 	do {
-		res = so._recvfrom(sock, buf, bufsize, 0, (struct sockaddr *)sin, &sasize);
+		res = so._recvfrom(sock, (char *)buf, bufsize, 0, (struct sockaddr *)sin, &sasize);
 	} while (res < 0 && (errno == EAGAIN || errno == EINTR));
 	return res;
 }
@@ -75,8 +72,8 @@ int sockgetcharcli(struct clientparam * param, int timeosec, int timeousec){
 	int len;
 
 	if(!param->clibuf){
-		if(!(param->clibuf = myalloc(BUFSIZE))) return 0;
-		param->clibufsize = BUFSIZE;
+		if(!(param->clibuf = myalloc(SRVBUFSIZE))) return 0;
+		param->clibufsize = SRVBUFSIZE;
 		param->clioffset = param->cliinbuf = 0;
 	}
 	if(param->cliinbuf && param->clioffset < param->cliinbuf){
@@ -137,7 +134,7 @@ int sockgetcharsrv(struct clientparam * param, int timeosec, int timeousec){
 	int bufsize;
 
 	if(!param->srvbuf){
-		bufsize = BUFSIZE;
+		bufsize = SRVBUFSIZE;
 		if(param->ndatfilterssrv > 0 && bufsize < 32768) bufsize = 32768;
 		if(!(param->srvbuf = myalloc(bufsize))) return 0;
 		param->srvbufsize = bufsize;
